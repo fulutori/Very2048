@@ -1,8 +1,3 @@
-"""
-pip3 install pandas
-pip3 install pynput
-"""
-
 #coding: utf-8
 from msvcrt import getch
 import random
