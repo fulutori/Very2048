@@ -1,0 +1,603 @@
+#include "d3m.hsp"
+
+title "シューティング"
+;画面の解像度設定
+screen_hight=1080
+screen_width=1920
+
+
+*start
+cls 0
+bgscr 0,screen_width,screen_hight,0,0,0:gsel 0,2
+color 250,230,200:boxf
+
+;ルールの表記
+font "ＭＳ 明朝",150,3
+pos 400,60
+color 0,0,0
+mes "2048 ver青天井"
+font "ＭＳ ゴシック",80,1
+pos 300,260
+mes "ルール"
+font "ＭＳ ゴシック",50,1
+pos 120,390
+mes "同じ数字をぶつけて倍にする"
+pos 100,750
+mes "キー操作\n↑↓←→キー：タイルを移動\n\n準備が出来たら\n右のボタンでスタート"
+font "ＭＳ ゴシック",30,1
+pos 120,470
+mes "「2」と「2」をぶつけたら「4」\n「4」と「4」をぶつけたら「8」になります\n\n すごく頑張ると「131072」までいけます\n\n\n TOP5にランクインでうまい棒1本プレゼント!!"
+
+;矢印の作成
+font "ＭＳ 明朝",350,1
+pos 606,775
+mes "→"
+pos 605,775
+mes "→"
+boxf 610,939,900,958
+color 250,230,200
+boxf 610,930,658,960
+boxf 840,880,880,892
+boxf 840,880,858,905
+boxf 840,1007,880,1015
+boxf 840,990,857,1007
+font "ＭＳ 明朝",300,1
+pos 650,800
+color 255,0,0
+mes "→"
+
+;スタートボタン
+objmode 2
+font "ＭＳ 明朝",50,1
+pos 1000,900
+objsize 400,100
+button "スタート",*main
+pos 1430,900
+button "ランキング",*ranking_all
+
+gosub *rank_d ;ランキングを描画
+color 250,230,20
+boxf 970,290,1870,450	;描画した経過時間を消去（四角形で塗りつぶす）
+color 0,0,0
+font "ＭＳ 明朝",65,1
+pos 1120,300
+mes "経過時間 00:00:00"	;経過時間の描画
+font "ＭＳ 明朝",50,1
+pos 1140,380
+mes "Score:--"
+pos 1460,380
+mes "Max:--"
+stop
+
+*main
+cls 4
+color 250,230,200:boxf
+font "ＭＳ 明朝",150,3
+pos 400,60
+color 0,0,0
+mes "2048 ver青天井"
+
+;初期化
+score=0
+lose=0
+number=2
+;盤面用二次元配列
+dim arr,4,4
+for y,0,4,1
+	for x,0,4,1
+		arr(x,y)=0
+	next
+next
+randomize
+
+
+;2048の盤面を描画
+color 152,97,97
+boxf 150,280,874,1004	;盤面の背景
+
+;ランダムな座標に「2」を2個生成
+gosub *make
+gosub *make
+gosub *draw
+number=2
+starttime=d3Timer() ;スタートボタンを押した直後から時間の計測開始
+
+;ランキングを描画
+gosub *rank_d
+
+;リセット、降参用ボタン
+font "ＭＳ 明朝",50,1
+pos 1000,900
+objsize 400,100
+button "リセット",*main
+pos 1430,900
+button "降参",*result
+
+repeat       ;繰り返しの始め
+	redraw 0       ;ココから下は仮想画面に描く
+	nowtime=d3timer()
+	dtime=nowtime-starttime
+	
+	color 250,230,20
+	boxf 970,290,1870,450	;描画した経過時間を消去（四角形で塗りつぶす）
+	second=dtime/1000\60
+	minute=dtime/1000/60
+	hour=minute/60
+	color 0,0,0
+	font "ＭＳ 明朝",65,1
+	pos 1120,300
+	if (second<10) { ;0～9秒のとき頭に0を付けて2桁表示にする
+		second="0"+second
+	}
+	if (minute<10) { ;0～9分のとき頭に0を付けて2桁表示にする
+		minute="0"+minute
+	}
+	if (hour<10) { ;0～9時間のとき頭に0を付けて2桁表示にする
+		hour="0"+hour
+	}
+	mes "経過時間 "+hour+":"+minute+":"+second	;経過時間の描画
+	font "ＭＳ 明朝",50,1
+	pos 1140,380
+	mes "score:"+score ;その時点でのスコア
+	pos 1460,380
+	mes "max:"+number ;その時点での最大数
+	gosub *draw
+	if (lose=16) { ;盤面が全て数字で埋まるとループから抜け出す
+		break
+	}
+
+	stick key	;キー入力受け付け
+	if ( key=1 ){	;「←」キー
+		gosub *left
+	}
+	if ( key=2 ){	;「↑」キー
+		gosub *up
+	}
+	if ( key=4 ){	;「→」キー
+		gosub *right
+	}
+	if ( key=8 ){	;「↓」キー
+		gosub *down
+	}
+	
+	redraw 1 ;仮想画面に描画していたものを表示
+	await 1
+loop
+gosub *result ;結果を表示
+stop
+
+*make	;新たな「2」が出現する場所の選定
+	rnd_x = rnd(4)
+	rnd_y = rnd(4)
+	while (arr(rnd_x,rnd_y) != 0)	;ランダムに選んだ場所が「0」のとき「2」を置く
+		rnd_x = rnd(4) ;「0」以外のときは選び直し
+		rnd_y = rnd(4)
+	wend
+	tof = rnd(14) 
+	;難易度設定用
+	if (easy=0) { ;「4」も出るパターン(本家仕様？)
+		if (tof = 4) {
+			arr(rnd_x,rnd_y) = 4
+		} else {
+			arr(rnd_x,rnd_y) = 2
+		}
+	} else { ;「2」しか出ないパターン
+		arr(rnd_x,rnd_y) = 2
+	}
+
+	return
+
+*judge ;詰み判定
+	lose=0
+	for y,0,4,1
+		for x,0,4,1
+			if (arr(x,y) != 0) { ;「0(何もない)」以外(数字)のとき+1
+				lose++
+				if (x<3) {
+					if (arr(x,y) == arr(x+1,y)) { ;同じ数字が隣合っているときは横に動かせるため続行可能であるためloseを-100してゲームオーバーにしない
+						lose=-100
+					}
+				}
+				if (y<3) {
+					if (arr(x,y) == arr(x,y+1)) {
+						lose=-100
+					}
+				}
+			}
+		next
+	next
+	if (lose=16) {
+		gosub *result ;盤面が埋まっているとき(lose=16)は結果画面へ
+	}
+	return
+
+*result
+	clrobj 0,1
+	color 0,0,0
+	font "ＭＳ 明朝",120,1
+	pos 100,590
+	mes "ゲームオーバー"
+	redraw 1
+	dialog "ゲームオーバー\n名前を入力してください"
+	
+		
+	font "ＭＳ 明朝",60,1
+	name="名前"
+	pos 1050,900
+	input name,500,70,10
+	font "ＭＳ 明朝",50,1
+	pos 1570,900
+	objsize 200,70
+	button "決定",*write
+	stop
+
+*write
+	notesel rank
+	noteload "ranking.txt"
+	total_line=noteinfo(0)
+	dim ranking,total_line
+	i=0
+	repeat total_line
+		noteget temp,i
+		split temp,",",temp2
+		ranking(i)=temp2(2)
+		if (score>=ranking(i)) {
+			noteadd hour+":"+minute+":"+second+","+name+","+str(score)+","+str(number),i
+			break
+		}
+		if (i=total_line-1) {
+			noteadd hour+":"+minute+":"+second+","+name+","+str(score)+","+str(number),-1
+		}
+		i++
+	loop
+	notesave "ranking.txt"
+	goto *start
+	stop
+
+*rank_d
+	color 250,230,20
+	boxf 970,450,1870,860
+	i=0
+	notesel top
+	noteload "ranking.txt"
+	
+	color 0,0,0
+	pos 1320,460
+	mes "TOP 5"
+	font "ＭＳ 明朝",50,1
+	pos 1110,540
+	mes "Time　   Name 　  Score  Max"
+	repeat 5
+		noteget temp3,i
+		split temp3,",",temp4
+		pos 990,600+i*50 ;ランク
+		mes str(i+1)
+		pos 1050,600+i*50 ;タイム
+		mes temp4(0)
+		pos 1280,600+i*50 ;名前
+		mes temp4(1)
+		pos 1580,600+i*50 ;スコア
+		mes temp4(2)
+		pos 1750,600+i*50 ;最大数
+		mes temp4(3)
+		i++
+	loop
+	return
+
+*ranking_all
+	exec "ranking.exe"
+	end
+
+*draw
+	for y,0,4,1
+		for x,0,4,1
+			if (arr(x,y) = 0) {
+				color 187,165,165
+				boxf 178*x+160,178*y+290,178*x+330,178*y+460
+				color 0,0,0
+			} else : if (arr(x,y) = 2) {
+				color 237,227,227
+				boxf 178*x+160,178*y+290,178*x+330,178*y+460
+				color 0,0,0
+				font "ＭＳ 明朝",80,1
+				pos 178*x+225,178*y+332
+				mes "2"
+			} else : if (arr(x,y) = 4) {
+				color 255,237,209
+				boxf 178*x+160,178*y+290,178*x+330,178*y+460
+				color 0,0,0
+				font "ＭＳ 明朝",80,1
+				pos 178*x+222,178*y+332
+				mes "4"
+			} else : if (arr(x,y) = 8) {
+				color 255,198,107
+				boxf 178*x+160,178*y+290,178*x+330,178*y+460
+				color 0,0,0
+				font "ＭＳ 明朝",80,1
+				pos 178*x+225,178*y+332
+				mes "8"
+			} else : if (arr(x,y) = 16) {
+				color 255,127,80
+				boxf 178*x+160,178*y+290,178*x+330,178*y+460
+				color 0,0,0
+				font "ＭＳ 明朝",80,1
+				pos 178*x+207,178*y+332
+				mes "16"
+			}  else : if (arr(x,y) = 32) {
+				color 255,82,82
+				boxf 178*x+160,178*y+290,178*x+330,178*y+460
+				color 0,0,0
+				font "ＭＳ 明朝",80,1
+				pos 178*x+205,178*y+332
+				mes "32"
+			} else : if (arr(x,y) = 64) {
+				color 255,0,0
+				boxf 178*x+160,178*y+290,178*x+330,178*y+460
+				color 0,0,0
+				font "ＭＳ 明朝",80,1
+				pos 178*x+203,178*y+332
+				mes "64"
+			} else : if (arr(x,y) = 128) {
+				color 255,250,153
+				boxf 178*x+160,178*y+290,178*x+330,178*y+460
+				color 0,0,0
+				font "ＭＳ 明朝",80,1
+				pos 178*x+183,178*y+332
+				mes "128"
+			} else : if (arr(x,y) = 256) {
+				color 255,255,0
+				boxf 178*x+160,178*y+290,178*x+330,178*y+460
+				color 0,0,0
+				font "ＭＳ 明朝",80,1
+				pos 178*x+183,178*y+332
+				mes "256"
+			} else : if (arr(x,y) = 512) {
+				color 150,150,255
+				boxf 178*x+160,178*y+290,178*x+330,178*y+460
+				color 0,0,0
+				font "ＭＳ 明朝",80,1
+				pos 178*x+183,178*y+332
+				mes "512"
+			} else : if (arr(x,y) = 1024) {
+				color 100,100,255
+				boxf 178*x+160,178*y+290,178*x+330,178*y+460
+				color 0,0,0
+				font "ＭＳ 明朝",70,1
+				pos 178*x+172,178*y+337
+				mes "1024"
+			} else : if (arr(x,y) = 2048) {
+				color 0,0,255
+				boxf 178*x+160,178*y+290,178*x+330,178*y+460
+				color 0,0,0
+				font "ＭＳ 明朝",70,1
+				pos 178*x+174,178*y+337
+				mes "2048"
+			} else : if (arr(x,y) = 4096) {
+				color 0,0,128
+				boxf 178*x+160,178*y+290,178*x+330,178*y+460
+				color 255,255,255
+				font "ＭＳ 明朝",70,1
+				pos 178*x+173,178*y+337
+				mes "4096"
+			} else : if (arr(x,y) = 8192) {
+				color 0,0,128
+				boxf 178*x+160,178*y+290,178*x+330,178*y+460
+				color 255,255,255
+				font "ＭＳ 明朝",70,1
+				pos 178*x+173,178*y+337
+				mes "8192"
+			} else : if (arr(x,y) = 16384) {
+				color 0,0,128
+				boxf 178*x+160,178*y+290,178*x+330,178*y+460
+				color 255,255,255
+				font "ＭＳ 明朝",60,1
+				pos 178*x+165,178*y+342
+				mes "16384"
+			} else : if (arr(x,y) = 32768) {
+				color 0,0,128
+				boxf 178*x+160,178*y+290,178*x+330,178*y+460
+				color 255,255,255
+				font "ＭＳ 明朝",60,1
+				pos 178*x+167,178*y+342
+				mes "32768"
+			} else : if (arr(x,y) = 65536) {
+				color 0,0,128
+				boxf 178*x+160,178*y+290,178*x+330,178*y+460
+				color 255,255,255
+				font "ＭＳ 明朝",60,1
+				pos 178*x+168,178*y+342
+				mes "65536"
+			} else : if (arr(x,y) = 131072) {
+				color 0,0,128
+				boxf 178*x+160,178*y+290,178*x+330,178*y+460
+				color 255,255,255
+				font "ＭＳ 明朝",50,1
+				pos 178*x+165,178*y+350
+				mes "131072"
+			}
+		next
+	next
+	return
+
+*up
+	move=0
+	for x,0,4,1
+		zero=0
+		for y,0,4,1
+			if (arr(x,y) = 0) {
+				zero++
+			} else : if (arr(x,y) !=0 & y!=0 & zero!=0) {
+				arr(x,y-zero) = arr(x,y)
+				arr(x,y)=0
+				move++
+			}
+		next
+	next
+	for x,0,4,1
+		zero=0
+		for y,0,3,1
+			if (arr(x,y) != 0 & arr(x,y) == arr(x,y+1)) {
+				arr(x,y) = arr(x,y) * 2
+				arr(x,y+1) = 0
+				score = score + arr(x,y)
+				move++
+				if (arr(x,y)>number) {
+					number=arr(x,y)
+				}
+			}
+		next
+	next
+	for x,0,4,1
+		zero=0
+		for y,0,4,1
+			if (arr(x,y) = 0) {
+				zero++
+			} else : if (arr(x,y) !=0 & y!=0 & zero!=0) {
+				arr(x,y-zero) = arr(x,y)
+				arr(x,y)=0
+			}
+		next
+	next
+	if (move!=0) {
+		gosub *make
+	} else {
+		gosub *judge
+	}
+
+	return
+
+*down
+	move=0
+	for x,0,4,1
+		zero=0
+		for y,3,-1,-1
+			if (arr(x,y) = 0) {
+				zero++
+			} else : if (arr(x,y) !=0 & y!=3 & zero!=0) {
+				arr(x,y+zero) = arr(x,y)
+				arr(x,y)=0
+				move++
+			}
+		next
+	next
+	for x,0,4,1
+		for y,3,0,-1
+			if (arr(x,y) != 0 & arr(x,y) == arr(x,y-1)) {
+				arr(x,y) = arr(x,y) * 2
+				arr(x,y-1) = 0
+				score = score + arr(x,y)
+				move++
+				if (arr(x,y)>number) {
+					number=arr(x,y)
+				}
+			}
+		next
+	next
+	for x,0,4,1
+		zero=0
+		for y,3,-1,-1
+			if (arr(x,y) = 0) {
+				zero++
+			} else : if (arr(x,y) !=0 & y!=3 & zero!=0) {
+				arr(x,y+zero) = arr(x,y)
+				arr(x,y)=0
+			}
+		next
+	next
+	if (move!=0) {
+		gosub *make
+	} else {
+		gosub *judge
+	}
+
+	return
+
+*right
+	move=0
+	for y,0,4,1
+		zero=0
+		for x,3,-1,-1
+			if (arr(x,y) = 0) {
+				zero++
+			} else : if (arr(x,y) !=0 & x!=3 & zero!=0) {
+				arr(x+zero,y) = arr(x,y)
+				arr(x,y)=0
+				move++
+			}
+		next
+	next
+	for y,0,4,1
+		for x,3,0,-1
+			if (arr(x,y) != 0 & arr(x,y) == arr(x-1,y)) {
+				arr(x,y) = arr(x,y) * 2
+				arr(x-1,y) = 0
+				score = score + arr(x,y)
+				move++
+				if (arr(x,y)>number) {
+					number=arr(x,y)
+				}
+			}
+		next
+	next
+	for y,0,4,1
+		zero=0
+		for x,3,-1,-1
+			if (arr(x,y) = 0) {
+				zero++
+			} else : if (arr(x,y) !=0 & x!=3 & zero!=0) {
+				arr(x+zero,y) = arr(x,y)
+				arr(x,y)=0
+			}
+		next
+	next
+	if (move!=0) {
+		gosub *make
+	} else {
+		gosub *judge
+	}
+	return
+
+*left
+	move=0
+	for y,0,4,1
+		zero=0
+		for x,0,4,1
+			if (arr(x,y) = 0) {
+				zero++
+			} else : if (arr(x,y) !=0 & x!=0 & zero!=0) {
+				arr(x-zero,y) = arr(x,y)
+				arr(x,y)=0
+				move++
+			}
+		next
+	next
+	for y,0,4,1
+		for x,0,3,1
+			if (arr(x,y) != 0 & arr(x,y) == arr(x+1,y)) {
+				arr(x,y) = arr(x,y) * 2
+				arr(x+1,y) = 0
+				score = score + arr(x,y)
+				move++
+				if (arr(x,y)>number) {
+					number=arr(x,y)
+				}
+			}
+		next
+	next
+	for y,0,4,1
+		zero=0
+		for x,0,4,1
+			if (arr(x,y) = 0) {
+				zero++
+			} else : if (arr(x,y) !=0 & x!=0 & zero!=0) {
+				arr(x-zero,y) = arr(x,y)
+				arr(x,y)=0
+			}
+		next
+	next
+	if (move!=0) {
+		gosub *make
+	} else {
+		gosub *judge
+	}
+	return
